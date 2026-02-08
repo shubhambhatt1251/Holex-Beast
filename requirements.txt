@@ -1,0 +1,38 @@
+# Holex Beast - Dependencies
+# Install: pip install -r requirements.txt
+
+# Core / Config
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+
+# GUI
+PyQt5>=5.15.9
+
+# LLM Providers
+httpx>=0.25.0            # async HTTP for Groq / Gemini / Ollama APIs
+
+# Agent Tools
+duckduckgo-search>=4.1   # web search (no API key needed)
+
+# Voice
+vosk>=0.3.45             # offline speech-to-text
+pyaudio>=0.2.14          # microphone capture
+edge-tts>=6.1.9          # neural TTS via Microsoft Edge
+pyttsx3>=2.90            # offline TTS fallback
+pygame>=2.5.0            # audio playback for TTS
+
+# RAG
+chromadb>=0.4.22         # local vector database
+
+# Firebase (optional - falls back to SQLite without it)
+# firebase-admin>=6.2.0
+# requests>=2.31.0
+
+# System Control
+pycaw>=20230407           # Windows volume control
+pyautogui>=0.9.54         # screenshot
+Pillow>=10.0.0            # image handling for screenshots
+
+# Utilities
+aiofiles>=23.2.1         # async file I/O

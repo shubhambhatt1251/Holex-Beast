@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "holex-beast"
+version = "1.0.0"
+description = "AI voice assistant with multi-LLM support, RAG, agent tools, and smart home control"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Shubham"},
+]
+keywords = ["ai", "assistant", "voice", "llm", "rag", "agent", "groq", "gemini", "ollama"]
+
+dependencies = [
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    "PyQt5>=5.15.9",
+    "httpx>=0.25.0",
+    "duckduckgo-search>=4.1",
+    "vosk>=0.3.45",
+    "pyaudio>=0.2.14",
+    "edge-tts>=6.1.9",
+    "pyttsx3>=2.90",
+    "pygame>=2.5.0",
+    "chromadb>=0.4.22",
+    "aiofiles>=23.2.1",
+]
+
+[project.optional-dependencies]
+firebase = ["firebase-admin>=6.2.0"]
+system = ["pycaw>=20230407", "pyautogui>=0.9.54", "Pillow>=10.0.0"]
+dev = ["pytest>=7.4.0", "pytest-asyncio>=0.21.0", "ruff>=0.1.0"]
+
+[project.scripts]
+holex = "run:main"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

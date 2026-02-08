@@ -1,0 +1,13 @@
+# Holex Beast — Docker Compose
+# Quick start:  docker compose up
+
+services:
+  holex:
+    build: .
+    env_file: .env
+    ports:
+      - "8080:8080"     # future API server
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./plugins:/app/plugins
