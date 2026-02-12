@@ -32,7 +32,7 @@ MAX_ITERATIONS = 5  # Maximum tool-calling loops
 class HolexAgent:
     """
     The Brain.
-    
+
     It takes user input, decides if it needs tools (Search, Calc, OS Control),
     executes them, and keeps looping until it has a final answer.
     """
@@ -413,9 +413,7 @@ class HolexAgent:
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history:]
 
-    def clear_history(self) -> None:
-        """Clear conversation history."""
-        self._history.clear()
+
 
     def get_history(self) -> list[Message]:
         """Get current conversation history."""
