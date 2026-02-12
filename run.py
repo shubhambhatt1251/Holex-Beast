@@ -58,7 +58,7 @@ def init_services(args: argparse.Namespace) -> dict:
     try:
         from core.llm.router import LLMRouter
         router = LLMRouter(settings)
-        # CRITICAL: Must call async initialize() to connect providers
+        # Need a temp loop just to get the router ready
         loop = asyncio.new_event_loop()
         try:
             loop.run_until_complete(router.initialize())

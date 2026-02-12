@@ -1,10 +1,10 @@
 """
-Center control panel — premium voice sphere, mic button, live transcription,
-and desktop quick-action grid.
+Control Center Panel.
 
-The hero section: an animated 3D energy sphere reacts to voice audio,
-a prominent mic button toggles STT, and quick desktop actions are a grid
-of glowing buttons that send commands directly to the AI agent.
+Contains:
+1. `EnergySphere`: The custom 3D audio visualizer (PyQt painting).
+2. `QuickActions`: Grid of buttons for fast system commands.
+3. Microphone logic for the voice engine.
 """
 
 from __future__ import annotations
@@ -54,44 +54,53 @@ QUICK_ACTIONS = [
 ]
 
 
-# ── Energy Sphere (3D animated QPainter) ────────────────────────────
+# ── Energy Sphere (Neural Nebula Engine) ──────────────────────────────
 
 class EnergySphere(QWidget):
     """
-    Glowing animated sphere with orbiting wave arcs, particles,
-    and a pulsing inner core. Reacts to microphone audio level.
+    Volumetric Nebula Visualization.
+    Renders soft gradient clouds and stars. No hard edges/lines.
     """
+
+    # Modes
+    MODE_IDLE = 0
+    MODE_LISTENING = 1
+    MODE_PROCESSING = 2
+    MODE_AI_SPEAKING = 3
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(180, 180)
+        self.setMinimumSize(300, 300)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+        self._mode = self.MODE_IDLE
         self._audio_level = 0.0
         self._target_level = 0.0
         self._phase = 0.0
-        self._active = False
-        self._idle_pulse = 0.0
+        
+        # Physics
+        self._rotation_speed = 0.5
+        self._pulse_speed = 0.05
+        
+        # Nebula Cloud Layers (Randomized but consistent)
+        self._nebula_layers = []
+        for i in range(5):
+            self._nebula_layers.append({
+                "angle": i * (360 / 5),
+                "dist": random.uniform(0.2, 0.4),
+                "size": random.uniform(0.6, 0.9),
+                "speed": random.uniform(0.5, 1.5) * (1 if i % 2 == 0 else -1)
+            })
 
-        # Wave configs
-        self._waves = [
-            {"freq": 1.8, "amp": 0.35, "speed": 1.2,
-             "color": QColor(100, 140, 255, 140)},
-            {"freq": 2.4, "amp": 0.28, "speed": 0.9,
-             "color": QColor(140, 100, 255, 110)},
-            {"freq": 3.0, "amp": 0.22, "speed": 1.5,
-             "color": QColor(60, 180, 255, 90)},
-        ]
-
-        # Particles
+        # Particles (Starfield)
         self._particles = []
-        for _ in range(35):
+        for _ in range(150):
             self._particles.append({
-                "angle": random.uniform(0, math.tau),
-                "radius": random.uniform(0.45, 0.95),
-                "speed": random.uniform(0.3, 1.2),
-                "size": random.uniform(1.0, 3.5),
-                "alpha": random.randint(25, 130),
+                "x": random.uniform(-1, 1),
+                "y": random.uniform(-1, 1),
+                "z": random.uniform(0.1, 1.0), # Depth speed
+                "size": random.uniform(0.5, 2.0),
+                "alpha": random.randint(100, 255),
             })
 
         self._timer = QTimer(self)
@@ -99,22 +108,26 @@ class EnergySphere(QWidget):
         self._timer.timeout.connect(self._tick)
         self._timer.start()
 
-    def set_active(self, active: bool):
-        self._active = active
-        if not active:
-            self._target_level = 0.0
+    def set_mode(self, mode: int):
+        self._mode = mode
+        self.update()
 
     def set_audio_level(self, level: float):
         self._target_level = max(0.0, min(1.0, level))
 
     def _tick(self):
+        # Smooth audio
         diff = self._target_level - self._audio_level
-        self._audio_level += diff * 0.15
-        speed = 0.03 if self._active else 0.012
-        self._phase += speed + self._audio_level * 0.04
-        self._idle_pulse = math.sin(self._phase * 0.8) * 0.5 + 0.5
-        for p in self._particles:
-            p["angle"] += p["speed"] * 0.02 * (1.0 + self._audio_level * 2.0)
+        self._audio_level += diff * 0.2
+        
+        # Animation Phase
+        base_speed = 0.5
+        if self._mode == self.MODE_LISTENING: base_speed = 1.0
+        elif self._mode == self.MODE_PROCESSING: base_speed = 4.0
+        elif self._mode == self.MODE_AI_SPEAKING: base_speed = 1.5
+        
+        self._phase += base_speed + (self._audio_level * 2.0)
+        
         self.update()
 
     def paintEvent(self, event):
@@ -123,97 +136,136 @@ class EnergySphere(QWidget):
 
         w, h = self.width(), self.height()
         cx, cy = w / 2, h / 2
-        base_r = min(w, h) * 0.28
+        
+        # Determine Palette based on Mode
+        # Core Color, Outer Color
+        if self._mode == self.MODE_PROCESSING:
+            c_core = QColor(255, 255, 220)   # White/Gold
+            c_outer = QColor(255, 180, 50)   # Orange
+            pulse_rate = 10.0
+        elif self._mode == self.MODE_AI_SPEAKING:
+            c_core = QColor(255, 100, 255)   # Pink
+            c_outer = QColor(100, 50, 255)   # Purple
+            pulse_rate = 5.0
+        elif self._mode == self.MODE_LISTENING:
+            c_core = QColor(100, 255, 255)   # Cyan
+            c_outer = QColor(0, 100, 255)    # Blue
+            pulse_rate = 1.0
+        else: # IDLE
+            c_core = QColor(100, 150, 255)
+            c_outer = QColor(50, 50, 150)
+            pulse_rate = 0.5
 
-        pulse = (self._idle_pulse * 0.06 if not self._active
-                 else self._audio_level * 0.20)
-        sr = base_r * (1.0 + pulse)
-
-        # Outer atmospheric glow
-        gr = sr * 3.2
-        glow = QRadialGradient(cx, cy, gr)
-        ga = int(25 + self._audio_level * 70) if self._active else 14
-        glow.setColorAt(0.0, QColor(80, 120, 255, ga))
-        glow.setColorAt(0.25, QColor(100, 60, 220, int(ga * 0.6)))
-        glow.setColorAt(0.5, QColor(60, 80, 200, int(ga * 0.3)))
-        glow.setColorAt(1.0, QColor(20, 30, 80, 0))
+        # Audio Pulse Logic
+        audio_boost = self._audio_level * 0.5
+        # Breathing sine wave
+        breath = (math.sin(self._phase * 0.05 * pulse_rate) + 1.0) * 0.5 
+        
+        # 1. Background Glow (Transparent Vignette)
+        # Soft ambient glow behind everything
+        glow_r = min(w, h) * 0.6
+        bg_grad = QRadialGradient(cx, cy, glow_r)
+        c_bg = QColor(c_outer)
+        c_bg.setAlpha(40)
+        bg_grad.setColorAt(0.0, c_bg)
+        bg_grad.setColorAt(1.0, Qt.transparent)
+        painter.setBrush(QBrush(bg_grad))
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QBrush(glow))
-        painter.drawEllipse(QRectF(cx - gr, cy - gr, gr * 2, gr * 2))
+        painter.drawEllipse(QRectF(cx - glow_r, cy - glow_r, glow_r*2, glow_r*2))
 
-        # Core sphere with 3D gradient
-        core = QRadialGradient(cx - sr * 0.22, cy - sr * 0.28, sr * 1.3)
-        ca = int(170 + self._audio_level * 85) if self._active else 115
-        core.setColorAt(0.0, QColor(110, 150, 255, ca))
-        core.setColorAt(0.25, QColor(80, 105, 230, int(ca * 0.8)))
-        core.setColorAt(0.5, QColor(55, 60, 180, int(ca * 0.5)))
-        core.setColorAt(0.75, QColor(35, 40, 140, int(ca * 0.25)))
-        core.setColorAt(1.0, QColor(15, 20, 60, 0))
-        painter.setBrush(QBrush(core))
-        painter.drawEllipse(QRectF(cx - sr, cy - sr, sr * 2, sr * 2))
+        # 2. Nebula Clouds
+        painter.save()
+        painter.translate(cx, cy)
+        
+        # Rotate whole system slowly
+        painter.rotate(self._phase * 0.2)
+        
+        cloud_base_r = min(w, h) * 0.35
+        
+        for layer in self._nebula_layers:
+            painter.save()
+            painter.rotate(layer["angle"] + self._phase * layer["speed"] * 0.1)
+            
+            # Distance oscilates with breath
+            d = cloud_base_r * layer["dist"] * (1.0 + breath * 0.2 + audio_boost)
+            
+            # Draw gradient blob
+            sz = cloud_base_r * layer["size"]
+            
+            grad = QRadialGradient(0, d, sz)
+            c1 = QColor(c_outer)
+            c1.setAlpha(60)
+            c2 = QColor(c_outer)
+            c2.setAlpha(0)
+            
+            grad.setColorAt(0.0, c1)
+            grad.setColorAt(1.0, c2)
+            
+            painter.setBrush(QBrush(grad))
+            painter.drawEllipse(QRectF(-sz, d-sz, sz*2, sz*2))
+            
+            painter.restore()
+            
+        painter.restore()
 
-        # Inner specular highlight — 3D glass effect
-        hl = QRadialGradient(cx - sr * 0.18, cy - sr * 0.22, sr * 0.55)
-        ha = int(100 + self._audio_level * 80) if self._active else 50
-        hl.setColorAt(0.0, QColor(200, 220, 255, ha))
-        hl.setColorAt(0.5, QColor(140, 170, 255, int(ha * 0.4)))
-        hl.setColorAt(1.0, QColor(100, 140, 255, 0))
-        painter.setBrush(QBrush(hl))
-        painter.drawEllipse(QRectF(cx - sr * 0.55, cy - sr * 0.55,
-                                   sr * 1.1, sr * 1.1))
+        # 3. Core (The Star)
+        core_r = min(w, h) * 0.15 * (1.0 + audio_boost * 0.5)
+        core_grad = QRadialGradient(cx, cy, core_r)
+        
+        c_c1 = QColor(c_core)
+        c_c1.setAlpha(255)
+        c_c2 = QColor(c_outer)
+        c_c2.setAlpha(100)
+        
+        core_grad.setColorAt(0.0, c_c1)
+        core_grad.setColorAt(0.5, c_c2)
+        core_grad.setColorAt(1.0, Qt.transparent)
+        
+        painter.setBrush(QBrush(core_grad))
+        painter.drawEllipse(QRectF(cx - core_r, cy - core_r, core_r*2, core_r*2))
 
-        # Wave rings (only when active or transitioning)
-        if self._active or self._audio_level > 0.02:
-            for wi, wave in enumerate(self._waves):
-                path = QPainterPath()
-                pts = 80
-                wr = sr * (1.12 + wi * 0.14)
-                amp = wave["amp"] * sr * (0.3 + self._audio_level * 0.7)
-                for i in range(pts + 1):
-                    t = i / pts
-                    angle = t * math.pi * 2
-                    offset = math.sin(
-                        angle * wave["freq"] + self._phase * wave["speed"]
-                    ) * amp
-                    fade = math.sin(t * math.pi) ** 0.6
-                    offset *= fade
-                    r = wr + offset
-                    px = cx + math.cos(angle) * r
-                    py = cy + math.sin(angle) * r
-                    if i == 0:
-                        path.moveTo(px, py)
-                    else:
-                        path.lineTo(px, py)
-                color = QColor(wave["color"])
-                alpha = int(color.alpha() * (0.3 + self._audio_level * 0.7))
-                color.setAlpha(min(255, alpha))
-                pen = QPen(color, 1.8)
-                pen.setCapStyle(Qt.RoundCap)
-                painter.setPen(pen)
-                painter.setBrush(Qt.NoBrush)
-                painter.drawPath(path)
-
-        # Orbiting particles
+        # 4. Particles (Star Dust)
+        painter.save()
+        painter.translate(cx, cy)
+        
+        # Warp Effect: Particles stretch when speaking
+        is_warping = self._mode in [self.MODE_AI_SPEAKING, self.MODE_PROCESSING]
+        
         for p in self._particles:
-            pr = sr * p["radius"] * (1.0 + self._audio_level * 0.4)
-            px = cx + math.cos(p["angle"]) * pr
-            py = cy + math.sin(p["angle"]) * pr
-            alpha = (int(p["alpha"] * (0.5 + self._audio_level * 0.5))
-                     if self._active else int(p["alpha"] * 0.2))
+            # 3D projection simulation
+            # Move Z towards camera
+            p["z"] -= 0.01 * (1.0 + self._audio_level * 5.0)
+            if p["z"] <= 0.01:
+                p["z"] = 1.0 # Reset
+                p["x"] = random.uniform(-1, 1)
+                p["y"] = random.uniform(-1, 1)
+            
+            # Project
+            factor = 200.0 / p["z"]
+            x = p["x"] * factor
+            y = p["y"] * factor
+            
+            # Check bounds
+            if x*x + y*y > (w*h): continue
+            
+            sz = p["size"] / p["z"]
+            alpha = int(p["alpha"] * (1.0 - p["z"]))
+            
+            c = QColor(255, 255, 255, alpha)
+            painter.setBrush(c)
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(120, 160, 255, alpha))
-            size = p["size"] * (1.0 + self._audio_level * 0.5)
-            painter.drawEllipse(QPointF(px, py), size, size)
-
-        # Active ring pulse
-        if self._active:
-            ring_alpha = int(40 + self._audio_level * 60)
-            ring_r = sr * (1.35 + self._idle_pulse * 0.08)
-            painter.setPen(QPen(QColor(100, 140, 255, ring_alpha), 1.2))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(QRectF(cx - ring_r, cy - ring_r,
-                                       ring_r * 2, ring_r * 2))
-
+            
+            if is_warping and self._audio_level > 0.1:
+                # Streak
+                painter.setPen(QPen(c, sz))
+                lx = x * 1.1
+                ly = y * 1.1
+                painter.drawLine(QPointF(x, y), QPointF(lx, ly))
+            else:
+                painter.drawEllipse(QPointF(x, y), sz, sz)
+            
+        painter.restore()
+        
         painter.end()
 
 
@@ -273,22 +325,6 @@ class QuickActionButton(QFrame):
 class ControlCenter(QWidget):
     """
     Center panel — the hero section.
-
-    ┌────────────────────────────────────┐
-    │      [Voice Transcript]            │
-    │                                    │
-    │     ┌────────────────────┐         │
-    │     │  Energy Sphere     │         │
-    │     │   (3D animated)    │         │
-    │     └────────────────────┘         │
-    │                                    │
-    │      "Listening…" status           │
-    │       [🎤 Mic Button]              │
-    │                                    │
-    │   ── Desktop Quick Actions ──      │
-    │   [📸] [🌐] [⚙️] [📁] [🎵]        │
-    │   [🔒] [🌙] [💻] [🔊]             │
-    └────────────────────────────────────┘
     """
 
     voice_toggled = pyqtSignal(bool)
@@ -315,28 +351,52 @@ class ControlCenter(QWidget):
         lay.setContentsMargins(20, 12, 20, 14)
         lay.setSpacing(0)
 
-        # Transcript
-        self._transcript = QLabel("")
-        self._transcript.setWordWrap(True)
-        self._transcript.setMinimumHeight(44)
-        self._transcript.setMaximumHeight(72)
-        self._transcript.setAlignment(Qt.AlignCenter)
-        self._transcript.setStyleSheet(
-            "color: rgba(220, 225, 250, 0.95); "
-            "font-size: 15px; font-weight: 400; "
-            "line-height: 1.5; background: transparent; "
-            "padding: 6px 16px;"
+        # Header (Subtle)
+        hdr = QLabel("HOLEX VOICE INTELLIGENCE")
+        hdr.setAlignment(Qt.AlignCenter)
+        hdr.setStyleSheet(
+            "color: rgba(255,255,255,0.3); font-size: 10px; font-weight: 700; "
+            "letter-spacing: 2px; margin-top: 10px;"
         )
-        lay.addWidget(self._transcript)
+        lay.addWidget(hdr)
 
-        # Sphere
+        # Sphere Area (Center Stage)
         lay.addStretch(1)
         sc = QHBoxLayout()
         sc.setAlignment(Qt.AlignCenter)
         self._sphere = EnergySphere()
-        self._sphere.setFixedSize(240, 240)
+        self._sphere.setFixedSize(320, 320) # MASSIVE sphere
         sc.addWidget(self._sphere)
         lay.addLayout(sc)
+        
+        # Transcript Container (Below Sphere)
+        trans_lay = QVBoxLayout()
+        trans_lay.setSpacing(8)
+        trans_lay.setAlignment(Qt.AlignCenter)
+        
+        # 1. User Input (The "Question")
+        self._user_transcript = QLabel("")
+        self._user_transcript.setWordWrap(True)
+        self._user_transcript.setAlignment(Qt.AlignCenter)
+        self._user_transcript.setMinimumHeight(60)
+        self._user_transcript.setStyleSheet(
+            "color: #ffffff; font-size: 26px; font-weight: 600; "
+            "line-height: 1.3; font-family: 'Segoe UI', sans-serif; "
+            "background: transparent; padding: 0px 20px;"
+        )
+        trans_lay.addWidget(self._user_transcript)
+
+        # 2. AI Status (The "Answer")
+        self._ai_status = QLabel("")
+        self._ai_status.setAlignment(Qt.AlignCenter)
+        self._ai_status.setWordWrap(True)
+        self._ai_status.setStyleSheet(
+            "color: #a29bfe; font-size: 16px; font-weight: 500; "
+            "font-style: italic; background: transparent; letter-spacing: 0.5px;"
+        )
+        trans_lay.addWidget(self._ai_status)
+        
+        lay.addLayout(trans_lay)
         lay.addStretch(1)
 
         # Status
@@ -420,8 +480,10 @@ class ControlCenter(QWidget):
     def activate_voice(self):
         self._is_listening = True
         self._mic_btn.setChecked(True)
-        self._sphere.set_active(True)
-        self._transcript.setText("")
+        # MODE LISTENING (Cyan)
+        self._sphere.set_mode(EnergySphere.MODE_LISTENING)
+        self._user_transcript.setText("Listening...")
+        self._ai_status.setText("")
         self._partial_text = ""
         self._final_text = ""
         self._status.setText("Listening… speak now")
@@ -429,7 +491,8 @@ class ControlCenter(QWidget):
     def deactivate_voice(self):
         self._is_listening = False
         self._mic_btn.setChecked(False)
-        self._sphere.set_active(False)
+        # MODE IDLE
+        self._sphere.set_mode(EnergySphere.MODE_IDLE)
         self._silence_timer.stop()
         self._status.setText('Say "Hey Holex" or tap the mic')
 
@@ -450,6 +513,17 @@ class ControlCenter(QWidget):
             if self._is_listening:
                 self._silence_timer.start()
 
+    def set_ai_text(self, text: str):
+        """Display AI response in the status area and switch visual mode."""
+        self._ai_status.setText(text)
+        self._ai_status.setStyleSheet(
+            "color: #a29bfe; font-size: 18px; font-weight: 500; "
+            "line-height: 1.4; font-style: normal; background: transparent; "
+            "padding: 10px 20px;"
+        )
+        # MODE AI SPEAKING (Purple)
+        self._sphere.set_mode(EnergySphere.MODE_AI_SPEAKING)
+
     def set_status(self, text: str):
         self._status.setText(text)
 
@@ -460,35 +534,32 @@ class ControlCenter(QWidget):
     # ── Private ────────────────────────────────────────────────────
 
     def _update_transcript(self):
+        # Update User Text
         display = ""
         if self._final_text:
             display = self._final_text
         if self._partial_text:
             if display:
                 display += " "
-            display += (
-                f"<b>{self._partial_text}</b>"
-                "<span style='color: rgba(100,140,255,0.8);'>…</span>"
-            )
+            display += f"{self._partial_text}..."
+        
+        self._user_transcript.setText(display if display else (
+            "Listening..." if self._is_listening else ""
+        ))
+        
+        # Style user text based on state
         if not display and self._is_listening:
-            display = (
-                "<span style='color: rgba(140,150,190,0.4);'>"
-                "Listening…</span>"
-            )
-        self._transcript.setText(display)
+             self._user_transcript.setStyleSheet("color: rgba(255,255,255,0.4); font-size: 22px;")
+        else:
+             self._user_transcript.setStyleSheet("color: #ffffff; font-size: 22px;")
 
     def _on_mic_toggle(self):
         self._is_listening = self._mic_btn.isChecked()
         if self._is_listening:
-            self._sphere.set_active(True)
-            self._status.setText("Listening… speak now")
-            self._transcript.setText("")
-            self._partial_text = ""
-            self._final_text = ""
+            self.activate_voice()
             self.voice_toggled.emit(True)
         else:
-            self._sphere.set_active(False)
-            self._status.setText('Say "Hey Holex" or tap the mic')
+            self.deactivate_voice()
             if self._final_text.strip():
                 self.text_submitted.emit(self._final_text.strip())
             self.voice_toggled.emit(False)
@@ -496,11 +567,19 @@ class ControlCenter(QWidget):
     def _on_silence_timeout(self):
         if self._final_text.strip() and self._is_listening:
             self.text_submitted.emit(self._final_text.strip())
-            self._status.setText("Sent! Listening…")
+            self._status.setText("Sent!")
+            self._ai_status.setText("Processing command...")
+            
+            # MODE PROCESSING (Gold)
+            self._sphere.set_mode(EnergySphere.MODE_PROCESSING)
+            
             self._final_text = ""
             self._partial_text = ""
-            self._update_transcript()
+            self._user_transcript.setText("")
+            
+            # We don't reset to listening immediately here, the app logic might.
+            # But the timer below does reset it.
+            
             QTimer.singleShot(1500, lambda: (
-                self._status.setText("Listening… speak now")
-                if self._is_listening else None
-            ))
+                self.activate_voice() # Reset to listening state
+            ) if self._is_listening else None)

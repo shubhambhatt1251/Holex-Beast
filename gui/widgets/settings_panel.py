@@ -569,6 +569,19 @@ class SettingsPanel(QWidget):
 
         layout.addWidget(self._tabs)
 
+        # Apply button
+        apply_btn = QPushButton("✅  Apply Settings")
+        apply_btn.setCursor(Qt.PointingHandCursor)
+        apply_btn.setFixedHeight(36)
+        apply_btn.setStyleSheet(
+            "QPushButton { background: rgba(108,92,231,0.2); color: #a78bfa; "
+            "border: 1px solid rgba(108,92,231,0.3); border-radius: 8px; "
+            "font-weight: bold; font-size: 12px; margin: 8px 12px; } "
+            "QPushButton:hover { background: rgba(108,92,231,0.35); }"
+        )
+        apply_btn.clicked.connect(self._on_apply)
+        layout.addWidget(apply_btn)
+
     def _wrap_scroll(self, widget: QWidget) -> QScrollArea:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -596,3 +609,8 @@ class SettingsPanel(QWidget):
     @property
     def account_tab(self) -> AccountTab:
         return self._account_tab
+
+    def _on_apply(self) -> None:
+        """Collect settings from all tabs and emit settings_updated."""
+        settings = self._llm_tab.get_settings()
+        self.settings_updated.emit(settings)

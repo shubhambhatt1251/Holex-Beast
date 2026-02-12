@@ -1,4 +1,11 @@
-"""App config. Reads .env file and provides typed settings."""
+"""App config. Reads .env file and provides typed settings.
+
+## Personality:
+- Friendly, intelligent, and helpful
+- Conversational and engaging
+- Confident, honest about limitations
+- eager to assist with detailed explanations
+"""
 
 from __future__ import annotations
 
@@ -116,7 +123,7 @@ class VoiceSettings(BaseSettings):
     tts_rate: str = "+0%"
     tts_volume: str = "+0%"
     voice_activation: bool = True
-    silence_threshold: float = 1.5
+    silence_threshold: float = 3.0
     sample_rate: int = 16000
 
 
@@ -165,6 +172,17 @@ class AppSettings(BaseSettings):
     firebase: FirebaseSettings = Field(default_factory=FirebaseSettings)
     voice: VoiceSettings = Field(default_factory=VoiceSettings)
     rag: RAGSettings = Field(default_factory=RAGSettings)
+
+    # Conversational Prompt
+    conversational_prompt: str = (
+        "You are a friendly, intelligent, and helpful AI assistant named Holex. "
+        "Engage in natural, conversational dialogue. "
+        "Explain your reasoning and provide helpful context. "
+        "Use markdown for chat, but keep voice answers natural (avoid long lists if speaking). "
+        "Use tools when you need real-time data or system control. "
+        "If unsure, say so honestly. For complex questions, break down reasoning thoroughly. "
+        "Cite sources when using web search."
+    )
 
     @property
     def is_groq_configured(self) -> bool:

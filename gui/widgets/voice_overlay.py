@@ -146,120 +146,127 @@ class EnergySphere(QWidget):
         self._target_level = max(0.0, min(1.0, level))
 
     def _tick(self) -> None:
-        # Smooth audio level
+        # Smooth audio level transition
         diff = self._target_level - self._audio_level
-        self._audio_level += diff * 0.15
+        self._audio_level += diff * 0.2
 
-        # Phase advance (faster when active)
-        speed = 0.03 if self._active else 0.012
-        self._phase += speed + self._audio_level * 0.04
+        # Phase advance
+        speed = 0.04 if self._active else 0.015
+        self._phase += speed + self._audio_level * 0.08
 
-        # Idle breathing pulse
-        self._idle_pulse = math.sin(self._phase * 0.8) * 0.5 + 0.5
-
-        # Move particles
-        for p in self._particles:
-            p["angle"] += p["speed"] * 0.02 * (1.0 + self._audio_level * 2.0)
+        # Idle breathing
+        self._idle_pulse = math.sin(self._phase * 0.5) * 0.5 + 0.5
 
         self.update()
 
     def paintEvent(self, event) -> None:
+        is_active = self._active
+        level = self._audio_level
+        
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         w = self.width()
         h = self.height()
         cx, cy = w / 2, h / 2
-        base_r = min(w, h) * 0.28
+        
+        # Base radius
+        base_r = min(w, h) * 0.25
+        pulse_scale = 1.0 + (level * 0.3) + (self._idle_pulse * 0.05)
+        r = base_r * pulse_scale
 
-        # Audio-reactive size
-        pulse = self._idle_pulse * 0.06 if not self._active else self._audio_level * 0.15
-        sphere_r = base_r * (1.0 + pulse)
-
-        # --- Outer glow (large soft radial gradient) ---
-        glow_r = sphere_r * 2.8
+        # --- 1. Outer Glow (Soft ambience) ---
+        glow_r = r * 3.5
         glow = QRadialGradient(cx, cy, glow_r)
-        glow_alpha = int(25 + self._audio_level * 50) if self._active else 15
-        glow.setColorAt(0.0, QColor(80, 120, 255, glow_alpha))
-        glow.setColorAt(0.4, QColor(60, 80, 200, int(glow_alpha * 0.5)))
-        glow.setColorAt(1.0, QColor(20, 30, 80, 0))
+        alpha = int(40 + level * 60) if is_active else 20
+        glow.setColorAt(0.0, QColor(60, 100, 255, alpha))
+        glow.setColorAt(0.5, QColor(40, 60, 200, int(alpha * 0.4)))
+        glow.setColorAt(1.0, QColor(0, 0, 0, 0))
+        
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(glow))
         painter.drawEllipse(QRectF(cx - glow_r, cy - glow_r, glow_r * 2, glow_r * 2))
 
-        # --- Core sphere gradient ---
-        core = QRadialGradient(cx - sphere_r * 0.2, cy - sphere_r * 0.3, sphere_r * 1.2)
-        core_alpha = int(160 + self._audio_level * 80) if self._active else 120
-        core.setColorAt(0.0, QColor(100, 140, 255, core_alpha))
-        core.setColorAt(0.35, QColor(70, 90, 220, int(core_alpha * 0.7)))
-        core.setColorAt(0.7, QColor(40, 50, 160, int(core_alpha * 0.4)))
-        core.setColorAt(1.0, QColor(15, 20, 60, 0))
-        painter.setBrush(QBrush(core))
-        painter.drawEllipse(QRectF(
-            cx - sphere_r, cy - sphere_r, sphere_r * 2, sphere_r * 2
-        ))
+        # --- 2. 3D Particles Ring (Back) ---
+        # We simulate 3D by drawing particles sorted by Z depth
+        # For simplicity in this loop, we just draw "back" particles first
+        
+        # Orbital rings
+        self._draw_rings(painter, cx, cy, r, front=False)
 
-        # --- Inner bright highlight ---
-        hl = QRadialGradient(cx - sphere_r * 0.15, cy - sphere_r * 0.2, sphere_r * 0.5)
-        hl_alpha = int(80 + self._audio_level * 60) if self._active else 50
-        hl.setColorAt(0.0, QColor(180, 200, 255, hl_alpha))
-        hl.setColorAt(1.0, QColor(100, 140, 255, 0))
+        # --- 3. Core Sphere (The "Energy Source") ---
+        core_r = r * 0.9
+        grad = QRadialGradient(cx - core_r * 0.3, cy - core_r * 0.3, core_r * 1.5)
+        
+        # Deep blue/purple gradient
+        c1 = QColor(120, 180, 255) if is_active else QColor(100, 140, 255)
+        c2 = QColor(60, 40, 200)
+        c3 = QColor(10, 5, 40)
+        
+        grad.setColorAt(0.0, c1)
+        grad.setColorAt(0.4, c2)
+        grad.setColorAt(1.0, c3)
+        
+        painter.setBrush(QBrush(grad))
+        painter.drawEllipse(QRectF(cx - core_r, cy - core_r, core_r * 2, core_r * 2))
+
+        # --- 4. 3D Particles Ring (Front) ---
+        self._draw_rings(painter, cx, cy, r, front=True)
+        
+        # --- 5. Inner Highlight (Glass reflection) ---
+        hl_r = core_r * 0.8
+        hl = QRadialGradient(cx - hl_r * 0.5, cy - hl_r * 0.5, hl_r)
+        hl.setColorAt(0.0, QColor(255, 255, 255, 90))
+        hl.setColorAt(1.0, QColor(255, 255, 255, 0))
         painter.setBrush(QBrush(hl))
-        painter.drawEllipse(QRectF(
-            cx - sphere_r * 0.6, cy - sphere_r * 0.6,
-            sphere_r * 1.2, sphere_r * 1.2,
-        ))
-
-        # --- Orbiting wave lines ---
-        if self._active or self._audio_level > 0.02:
-            for wi, wave in enumerate(self._waves):
-                path = QPainterPath()
-                points = 80
-                wave_r = sphere_r * (1.1 + wi * 0.12)
-                amp = wave["amp"] * sphere_r * (0.3 + self._audio_level * 0.7)
-
-                for i in range(points + 1):
-                    t = i / points
-                    angle = t * math.pi * 2
-                    offset = math.sin(
-                        angle * wave["freq"] + self._phase * wave["speed"]
-                    ) * amp
-
-                    # Fade amplitude at edges for smooth wrap
-                    fade = math.sin(t * math.pi) ** 0.6
-                    offset *= fade
-
-                    r = wave_r + offset
-                    px = cx + math.cos(angle) * r
-                    py = cy + math.sin(angle) * r
-
-                    if i == 0:
-                        path.moveTo(px, py)
-                    else:
-                        path.lineTo(px, py)
-
-                color = QColor(wave["color"])
-                alpha = int(color.alpha() * (0.3 + self._audio_level * 0.7))
-                color.setAlpha(min(255, alpha))
-                pen = QPen(color, 1.8)
-                pen.setCapStyle(Qt.RoundCap)
-                painter.setPen(pen)
-                painter.setBrush(Qt.NoBrush)
-                painter.drawPath(path)
-
-        # --- Floating particles ---
-        for p in self._particles:
-            pr = sphere_r * p["radius"] * (1.0 + self._audio_level * 0.3)
-            px = cx + math.cos(p["angle"]) * pr
-            py = cy + math.sin(p["angle"]) * pr
-            alpha = int(p["alpha"] * (0.5 + self._audio_level * 0.5)) if self._active else int(p["alpha"] * 0.3)
-            dot_color = QColor(120, 160, 255, alpha)
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(dot_color)
-            size = p["size"] * (1.0 + self._audio_level * 0.5)
-            painter.drawEllipse(QPointF(px, py), size, size)
+        painter.drawEllipse(QRectF(cx - hl_r * 0.8, cy - hl_r * 0.8, hl_r * 1.4, hl_r * 1.4))
 
         painter.end()
+
+    def _draw_rings(self, p: QPainter, cx: float, cy: float, r: float, front: bool):
+        # Draw orbiting particles/lines
+        # We use a simple pseudo-3D projection: y is compressed (tilt)
+        tilt = 0.4
+        num_rings = 3
+        
+        for i in range(num_rings):
+            # Ring parameters
+            ring_r = r * (1.4 + i*0.4)
+            speed = (self._phase * (1.0 + i*0.5)) 
+            angle_offset = i * 2.0
+            
+            # Use 'waves' config if available or defaults
+            color_base = self._waves[i % len(self._waves)]["color"]
+            
+            # We draw arcs or particles
+            # Let's draw dynamic particles orbiting
+            num_particles = 12
+            for j in range(num_particles):
+                angle = (j / num_particles) * math.tau + speed + angle_offset
+                
+                # 3D coordinates
+                x = math.cos(angle) * ring_r
+                z = math.sin(angle) * ring_r  # Depth
+                y = z * tilt
+                
+                # Z-sorting: only draw if z match front/back request
+                is_front = z > 0
+                if is_front != front:
+                    continue
+                
+                # Perspective scaling
+                scale = 1.0 + (z / ring_r) * 0.3
+                alpha_factor = 0.5 + (z / ring_r) * 0.5
+                
+                # Draw particle
+                size = 3.0 * scale + (self._audio_level * 5.0)
+                alpha = int(color_base.alpha() * alpha_factor)
+                
+                col = QColor(color_base)
+                col.setAlpha(min(255, alpha))
+                p.setBrush(col)
+                p.setPen(Qt.NoPen)
+                p.drawEllipse(QPointF(cx + x, cy + y), size, size)
 
 
 # ---------------------------------------------------------------------------

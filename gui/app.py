@@ -1,13 +1,12 @@
 """
-Holex Beast — Main application window.
+Holex Beast - Main Window
 
-Premium 3-panel layout:
-┌──────────┬──────────────────────────┬──────────────────────┐
-│  TOOLS   │     CONTROL CENTER       │       CHAT           │
-│  PANEL   │  (Voice + Desktop)       │     INTERFACE        │
-│  (left)  │    Energy Sphere         │   Messages + Input   │
-│          │    Mic · Quick Actions   │                      │
-└──────────┴──────────────────────────┴──────────────────────┘
+This is the core GUI entry point. It sets up the 3-panel layout:
+1. Tools (Left) - Sidebar with agent capabilities
+2. Control Center (Middle) - The voice/visualizer engine
+3. Chat (Right) - Standard message interface
+
+Wires up all the signal/slots between the backend (Agent/STT) and the frontend.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, QPoint, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
@@ -33,6 +32,7 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QShortcut,
     QSizePolicy,
+    QSplitter,
     QStackedWidget,
     QStatusBar,
     QSystemTrayIcon,
@@ -45,6 +45,8 @@ from gui.widgets.chat_bubbles import MessageBubble, ToolCallBadge, TypingIndicat
 from gui.widgets.control_center import ControlCenter
 from gui.widgets.input_bar import InputBar
 from gui.widgets.settings_panel import SettingsPanel
+from gui.widgets.sidebar import Sidebar
+from gui.widgets.voice_overlay import VoiceOverlay
 
 # Holex Beast GUI widgets
 from gui.widgets.tools_panel import ToolsPanel
@@ -219,6 +221,7 @@ class HolexBeastApp(QMainWindow):
         self.conversation_manager = None
         self.storage_service = None
         self.event_bus = None
+        self._current_mode = "chat"  # Default input mode (web/chat/sparkle)
 
         self._setup_window()
         self._setup_ui()
@@ -262,10 +265,21 @@ class HolexBeastApp(QMainWindow):
         self._header = self._build_header()
         root_layout.addWidget(self._header)
 
-        # ── 3-Panel Body ──
+        # ── Body Layout: Sidebar + 3-Panel ──
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
+
+        # SIDEBAR — Conversation history (collapsible, hidden by default)
+        self._sidebar = Sidebar()
+        self._sidebar.setVisible(False)
+        body.addWidget(self._sidebar)
+
+        # Sidebar separator
+        sep0 = QFrame()
+        sep0.setFixedWidth(1)
+        sep0.setStyleSheet("background: rgba(255,255,255,0.04);")
+        body.addWidget(sep0)
 
         # LEFT — Tools Panel
         self._tools_panel = ToolsPanel()
@@ -277,25 +291,37 @@ class HolexBeastApp(QMainWindow):
         sep1.setStyleSheet("background: rgba(255,255,255,0.04);")
         body.addWidget(sep1)
 
-        # CENTER — Control Center
+        # CENTER + RIGHT — Resizable via QSplitter
+        self._splitter = QSplitter(Qt.Horizontal)
+        self._splitter.setHandleWidth(3)
+        self._splitter.setStyleSheet(
+            "QSplitter::handle { background: rgba(108,92,231,0.15); }"
+            "QSplitter::handle:hover { background: rgba(108,92,231,0.4); }"
+        )
+
+        # Center: Control Center
         self._control_center = ControlCenter()
         self._control_center.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding
         )
-        body.addWidget(self._control_center, 1)
+        self._splitter.addWidget(self._control_center)
 
-        # Vertical separator
-        sep2 = QFrame()
-        sep2.setFixedWidth(1)
-        sep2.setStyleSheet("background: rgba(255,255,255,0.04);")
-        body.addWidget(sep2)
-
-        # RIGHT — Chat Panel
+        # Right: Chat Panel
         self._chat_panel = self._build_chat_panel()
-        self._chat_panel.setFixedWidth(400)
-        body.addWidget(self._chat_panel)
+        self._chat_panel.setMinimumWidth(320)
+        self._splitter.addWidget(self._chat_panel)
+
+        # Set initial sizes (60% center, 40% chat)
+        self._splitter.setSizes([600, 400])
+
+        body.addWidget(self._splitter, 1)
 
         root_layout.addLayout(body, 1)
+
+        # Voice overlay (hidden, covers chat area)
+        self._voice_overlay = VoiceOverlay(self._chat_panel)
+        self._voice_overlay.setVisible(False)
+        self._voice_overlay.setGeometry(self._chat_panel.rect())
 
         # Settings panel (hidden, overlays right side)
         self._settings_panel = SettingsPanel()
@@ -343,13 +369,14 @@ class HolexBeastApp(QMainWindow):
 
         layout.addSpacing(8)
 
-        # Toggle tools panel
-        self._toggle_tools_btn = QPushButton("☰")
-        self._toggle_tools_btn.setObjectName("HeaderBtn")
-        self._toggle_tools_btn.setFixedSize(32, 32)
-        self._toggle_tools_btn.setCursor(Qt.PointingHandCursor)
-        self._toggle_tools_btn.setToolTip("Toggle tools panel")
-        layout.addWidget(self._toggle_tools_btn)
+        # Toggle sidebar (History)
+        self._toggle_sidebar_btn = QPushButton("☰")
+        self._toggle_sidebar_btn.setObjectName("HeaderBtn")
+        self._toggle_sidebar_btn.setFixedSize(32, 32)
+        self._toggle_sidebar_btn.setCursor(Qt.PointingHandCursor)
+        self._toggle_sidebar_btn.setToolTip("Toggle Menu / History")
+        self._toggle_sidebar_btn.clicked.connect(self._toggle_sidebar)
+        layout.addWidget(self._toggle_sidebar_btn)
 
         # New chat
         self._new_chat_btn = QPushButton("+")
@@ -395,6 +422,9 @@ class HolexBeastApp(QMainWindow):
         upgrade.setObjectName("UpgradeBtn")
         upgrade.setCursor(Qt.PointingHandCursor)
         upgrade.setFixedHeight(28)
+        # Upgrade — open settings panel to LLM tab
+        self._upgrade_btn = upgrade
+        upgrade.clicked.connect(self._on_upgrade_clicked)
         layout.addWidget(upgrade)
 
         layout.addSpacing(8)
@@ -408,12 +438,13 @@ class HolexBeastApp(QMainWindow):
         settings_btn.clicked.connect(self._toggle_settings)
         layout.addWidget(settings_btn)
 
-        # Avatar
+        # Avatar — open account settings
         avatar = QPushButton("S")
         avatar.setObjectName("HeaderAvatar")
         avatar.setFixedSize(32, 32)
         avatar.setCursor(Qt.PointingHandCursor)
-        avatar.setToolTip("Profile")
+        avatar.setToolTip("Profile & Account")
+        avatar.clicked.connect(self._on_avatar_clicked)
         layout.addWidget(avatar)
 
         return header
@@ -480,8 +511,10 @@ class HolexBeastApp(QMainWindow):
     # ── Signal Wiring ───────────────────────────────────────────────
 
     def _connect_signals(self) -> None:
-        # Header buttons
-        self._toggle_tools_btn.clicked.connect(self._toggle_tools)
+        # Connect signals
+        # self._toggle_sidebar_btn is already connected in _build_header
+        
+        # Shortcuts
         self._new_chat_btn.clicked.connect(self._on_new_chat)
 
         # Chat input
@@ -491,6 +524,7 @@ class HolexBeastApp(QMainWindow):
         self._input_bar.voice_toggled.connect(self._on_voice_toggle)
         self._input_bar.file_attached.connect(self._on_file_attached)
         self._input_bar.image_attached.connect(self._on_image_attached)
+        self._input_bar.mode_changed.connect(self._on_mode_changed)
 
         # Welcome suggestions
         self._chat_area.welcome.prompt_selected.connect(self._on_user_message)
@@ -500,7 +534,7 @@ class HolexBeastApp(QMainWindow):
 
         # Control center
         self._control_center.voice_toggled.connect(self._on_center_voice_toggle)
-        self._control_center.command_submitted.connect(self._on_user_message)
+        self._control_center.command_submitted.connect(self._on_command_submitted)
         self._control_center.text_submitted.connect(self._on_voice_text)
 
         # Settings
@@ -513,6 +547,17 @@ class HolexBeastApp(QMainWindow):
         )
         self._settings_panel.account_tab.login_requested.connect(self._on_login)
         self._settings_panel.account_tab.sync_requested.connect(self._on_sync)
+        self._settings_panel.settings_updated.connect(self._on_settings_updated)
+
+        # Sidebar
+        self._sidebar.new_chat_requested.connect(self._on_new_chat)
+        self._sidebar.conversation_selected.connect(self._on_conversation_selected)
+        self._sidebar.conversation_deleted.connect(self._on_conversation_deleted)
+        self._sidebar.theme_selected.connect(self._apply_theme)
+
+        # Voice overlay
+        self._voice_overlay.text_submitted.connect(self._on_user_message)
+        self._voice_overlay.voice_stopped.connect(self._on_voice_overlay_stopped)
 
     def _load_models(self) -> None:
         """Populate model selector in input bar and subscribe to agent events."""
@@ -566,6 +611,23 @@ class HolexBeastApp(QMainWindow):
         self._input_bar.set_enabled(False)
         self._status_label.setText("Holex Beast v1.0 · Processing…")
 
+        # Save to conversation manager
+        if self.conversation_manager:
+            from core.llm.base import Message as LLMMessage
+            self.conversation_manager.add_message(LLMMessage.user(text))
+            # Update sidebar title (auto-titled after first message)
+            conv = self.conversation_manager.get_active()
+            if conv and conv.id in self._sidebar._items:
+                item = self._sidebar._items[conv.id]
+                title = conv.title[:28] + ("..." if len(conv.title) > 28 else "")
+                item.title_text = conv.title
+                item.findChild(QLabel, "ConvTitle")
+                # Just remove and re-add to update display
+                self._sidebar.remove_conversation(conv.id)
+                self._sidebar.add_conversation(
+                    conv_id=conv.id, title=conv.title, is_active=True
+                )
+
         if self.agent:
             self._send_to_agent(text)
         else:
@@ -577,7 +639,14 @@ class HolexBeastApp(QMainWindow):
 
     def _send_to_agent(self, text: str) -> None:
         async def _run():
-            return await self.agent.process(text)
+            # Query RAG for relevant document context
+            rag_context = None
+            if self.rag_pipeline:
+                try:
+                    rag_context = await self.rag_pipeline.query(text)
+                except Exception:
+                    pass  # RAG is optional enhancement
+            return await self.agent.process(text, rag_context=rag_context)
 
         worker = AsyncWorker(_run())
         worker.result_ready.connect(self._on_agent_response)
@@ -639,6 +708,14 @@ class HolexBeastApp(QMainWindow):
         self._input_bar.focus_input()
         self._status_label.setText("Holex Beast v1.0 · Ready")
 
+        # Save assistant response to conversation manager
+        if self.conversation_manager:
+            from core.llm.base import Message as LLMMessage
+            self.conversation_manager.add_message(LLMMessage.assistant(text))
+
+        # Update Voice UI with the response text
+        self._control_center.set_ai_text(text)
+
         # TTS — only speak for voice-initiated messages
         if self._voice_mode and self.tts:
             self._voice_mode = False
@@ -668,6 +745,18 @@ class HolexBeastApp(QMainWindow):
         self._chat_area.clear_messages()
         self._chat_area.show_welcome()
         self._current_conversation_id = str(uuid.uuid4())
+        # Clear agent memory so AI doesn't remember old conversation
+        if self.agent:
+            self.agent.clear_history()
+        # Start a new conversation in the manager
+        if self.conversation_manager:
+            conv = self.conversation_manager.new_conversation()
+            self._current_conversation_id = conv.id
+            # Add to sidebar
+            self._sidebar.add_conversation(
+                conv_id=conv.id, title="New Chat", is_active=True
+            )
+            self._sidebar.set_active(conv.id)
 
     @pyqtSlot()
     def _on_clear_chat(self) -> None:
@@ -679,6 +768,95 @@ class HolexBeastApp(QMainWindow):
         if reply == QMessageBox.Yes:
             self._chat_area.clear_messages()
             self._chat_area.show_welcome()
+            # Clear agent memory
+            if self.agent:
+                self.agent.clear_history()
+            if self.conversation_manager:
+                self.conversation_manager.clear_active()
+
+    @pyqtSlot(str)
+    def _on_conversation_selected(self, conv_id: str) -> None:
+        """Switch to a different conversation from the sidebar."""
+        if self.conversation_manager:
+            conv = self.conversation_manager.switch_to(conv_id)
+            if conv:
+                self._chat_area.clear_messages()
+                self._chat_area.show_messages()
+                # Replay messages into the chat UI
+                for msg in conv.messages:
+                    role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+                    if role in ("user", "assistant"):
+                        self._chat_area.add_message(role, msg.content)
+                # Rebuild agent history
+                if self.agent:
+                    self.agent.clear_history()
+                    self.agent._history = list(conv.messages)
+                self._sidebar.set_active(conv_id)
+                self._current_conversation_id = conv_id
+
+    @pyqtSlot(str)
+    def _on_conversation_deleted(self, conv_id: str) -> None:
+        """Delete a conversation from the sidebar."""
+        reply = QMessageBox.question(
+            self, "Delete Conversation",
+            "Delete this conversation permanently?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            if self.conversation_manager:
+                self.conversation_manager.delete_conversation(conv_id)
+            self._sidebar.remove_conversation(conv_id)
+
+    # ── Voice Overlay ───────────────────────────────────────────────
+
+    def _on_voice_toggle(self, active: bool) -> None:
+        """Toggle voice overlay from input bar's mic button."""
+        if active:
+            # We now use the Control Center (inline) instead of overlay
+            # self._voice_overlay.setGeometry(...)
+            # self._voice_overlay.activate()
+            self._start_listening()
+        else:
+            # self._voice_overlay.deactivate()
+            self._stop_listening()
+
+    def _on_center_voice_toggle(self, active: bool) -> None:
+        """Toggle voice from control center's mic button."""
+        if active:
+            # Use inline Control Center
+            self._start_listening()
+        else:
+            self._stop_listening()
+
+    def _on_voice_overlay_stopped(self) -> None:
+        """Voice overlay closed."""
+        self._voice_overlay.deactivate()
+        self._stop_listening()
+
+    # ── Sidebar Toggle ──────────────────────────────────────────────
+
+    @pyqtSlot()
+    def _toggle_sidebar(self) -> None:
+        """Toggle conversation history sidebar visibility."""
+        is_visible = self._sidebar.isVisible()
+        self._sidebar.setVisible(not is_visible)
+
+
+    # ── Upgrade / Avatar Buttons ────────────────────────────────────
+
+    def _on_upgrade_clicked(self) -> None:
+        """Show settings panel, opened to LLM tab."""
+        self._settings_panel.setVisible(True)
+        # Switch to LLM tab (index 0)
+        self._settings_panel._tabs.setCurrentIndex(0)
+        self._status_label.setText("Holex Beast v1.0 · Configure your LLM providers")
+
+    def _on_avatar_clicked(self) -> None:
+        """Show settings panel, opened to Account tab."""
+        self._settings_panel.setVisible(True)
+        # Switch to Account tab (index 4)
+        self._settings_panel._tabs.setCurrentIndex(4)
+        self._status_label.setText("Holex Beast v1.0 · Profile & Account")
 
     # ── Model / Provider ────────────────────────────────────────────
 
@@ -726,25 +904,28 @@ class HolexBeastApp(QMainWindow):
         self._status_label.setText("Holex Beast v1.0 · Stopped")
 
     # ── Voice Control ───────────────────────────────────────────────
-
-    @pyqtSlot(bool)
-    def _on_voice_toggle(self, active: bool) -> None:
-        """Voice toggled from the input bar mic button."""
-        if active:
-            self._start_listening()
-        else:
-            self._stop_listening()
-
-    def _on_center_voice_toggle(self, active: bool) -> None:
-        """Voice toggled from the center control panel mic button."""
-        if active:
-            self._start_listening()
-        else:
-            self._stop_listening()
+    # NOTE: _on_voice_toggle and _on_center_voice_toggle are defined
+    # above in the Voice Overlay section (lines ~788-806).
+    # They launch VoiceOverlay AND call _start/_stop_listening.
 
     def _start_listening(self) -> None:
         self._control_center.activate_voice()
         self._input_bar.set_voice_active(True)
+        
+        # Shared View: Keep Chat Panel visible
+        self._chat_panel.show()
+        self._splitter.setSizes([650, 500])
+
+        if not self.stt:
+            # FEEDBACK for missing model
+            self._control_center.set_status("❌ Voice Error: No STT Model")
+            self._control_center.set_ai_text(
+                "Please download a Vosk model to the `models/` directory.\n"
+                "Check logs for details."
+            )
+            QTimer.singleShot(3000, self._stop_listening)
+            return
+
         if self.stt:
             try:
                 self.stt.start_listening(
@@ -766,19 +947,56 @@ class HolexBeastApp(QMainWindow):
     def _stop_listening(self) -> None:
         self._control_center.deactivate_voice()
         self._input_bar.set_voice_active(False)
+        
+        # Restore default balanced view
+        self._chat_panel.show()
+        self._splitter.setSizes([600, 500])
+
         if self.stt:
             try:
                 self.stt.stop_listening()
             except Exception:
                 pass
 
+    @pyqtSlot(str)
+    def _on_command_submitted(self, cmd: str) -> None:
+        """Handle Quick Action commands (intercept for reliability)."""
+        # 1. Show in Chat
+        self._on_user_message(cmd)
+        
+        # 2. Fast-path for Screenshot (Reliability fix)
+        # If the user clicks "Screenshot", we shouldn't rely solely on LLM agent
+        # which might be slow or offline.
+        if "screenshot" in cmd.lower() and "take" in cmd.lower():
+            # Try to find the system_control tool
+            if self.agent:
+                for tool in self.agent.tools:
+                    if tool.name == "system_control":
+                        # Execute directly in background
+                        async def _run_snap():
+                            await tool.execute("screenshot")
+                        
+                        worker = AsyncWorker(_run_snap())
+                        worker.result_ready.connect(lambda res: (
+                            self._on_response_received(f"✅ {res.output}")
+                        ))
+                        worker.start()
+                        self._workers.append(worker)
+                        return
+
     def _on_stt_partial(self, text: str) -> None:
         if text.strip():
             self._control_center.set_partial_text(text.strip())
+            # Forward to voice overlay
+            if self._voice_overlay.isVisible():
+                self._voice_overlay.set_partial_text(text.strip())
 
     def _on_stt_final(self, text: str) -> None:
         if text.strip():
             self._control_center.set_final_text(text.strip())
+            # Forward to voice overlay
+            if self._voice_overlay.isVisible():
+                self._voice_overlay.set_final_text(text.strip())
             self._on_voice_text(text.strip())
 
     def _on_audio_level_event(self, event) -> None:
@@ -788,6 +1006,9 @@ class HolexBeastApp(QMainWindow):
         elif isinstance(event, dict):
             level = event.get("level", 0.0)
         self._audio_level_signal.emit(level)
+        # Forward to voice overlay
+        if self._voice_overlay.isVisible():
+            self._voice_overlay.set_audio_level(level)
 
     def _on_voice_text(self, text: str) -> None:
         if text.strip():
@@ -800,6 +1021,17 @@ class HolexBeastApp(QMainWindow):
     def _on_tool_activated(self, tool_id: str, example: str) -> None:
         """Tool card clicked → send example command directly to AI."""
         self._on_user_message(example)
+
+    # ── Mode Toggle ─────────────────────────────────────────────────
+
+    @pyqtSlot(str)
+    def _on_mode_changed(self, mode: str) -> None:
+        """Handle mode toggle (web/chat/sparkle) from input bar."""
+        self._current_mode = mode
+        mode_labels = {"web": "Web Search", "chat": "Chat", "sparkle": "AI Analysis"}
+        self._status_label.setText(
+            f"Holex Beast v1.0 · {mode_labels.get(mode, 'Chat')} Mode"
+        )
 
     # ── File / Image Attachment ─────────────────────────────────────
 
@@ -823,7 +1055,14 @@ class HolexBeastApp(QMainWindow):
     def _on_file_attached(self, path: str) -> None:
         if self.rag_pipeline:
             try:
-                self.rag_pipeline.add_document(path)
+                import asyncio as _aio
+                _loop = _aio.new_event_loop()
+                try:
+                    _loop.run_until_complete(
+                        self.rag_pipeline.ingest_file(path)
+                    )
+                finally:
+                    _loop.close()
                 self._settings_panel.rag_tab.add_document_item(
                     Path(path).name, path
                 )
@@ -843,6 +1082,18 @@ class HolexBeastApp(QMainWindow):
                 self.rag_pipeline.remove_document(path)
             except Exception:
                 pass
+
+    # ── Settings Apply ──────────────────────────────────────────────
+
+    @pyqtSlot(dict)
+    def _on_settings_updated(self, settings: dict) -> None:
+        """Apply LLM settings from the settings panel to the router."""
+        if self.llm_router:
+            if "temperature" in settings:
+                self.llm_router.default_temperature = settings["temperature"]
+            if "max_tokens" in settings:
+                self.llm_router.default_max_tokens = settings["max_tokens"]
+        self._status_label.setText("Holex Beast v1.0 · Settings applied ✓")
 
     # ── UI Toggles ──────────────────────────────────────────────────
 
@@ -980,6 +1231,16 @@ class HolexBeastApp(QMainWindow):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        # Reposition settings overlay on resize
+        if self._settings_panel.isVisible():
+            w = 320
+            self._settings_panel.setGeometry(
+                self.centralWidget().width() - w, 48,
+                w, self.centralWidget().height() - 74,
+            )
+        # Reposition voice overlay on resize
+        if self._voice_overlay.isVisible():
+            self._voice_overlay.setGeometry(self._chat_panel.rect())
 
     def closeEvent(self, event) -> None:
         if hasattr(self, "_tray") and not getattr(self, "_force_quit", False):

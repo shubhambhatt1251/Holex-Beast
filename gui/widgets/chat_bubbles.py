@@ -67,28 +67,34 @@ class MessageBubble(QWidget):
 
     def _build_user(self, text, avatar, timestamp):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 4, 16, 4)
-        layout.setSpacing(10)
+        layout.setContentsMargins(16, 6, 16, 6)
+        layout.setSpacing(12)
         layout.addStretch()
 
         # Bubble
         bubble = QFrame()
         bubble.setObjectName("UserBubble")
         bubble.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        bubble.setStyleSheet("""
+            #UserBubble {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #6c5ce7, stop:1 #8e7dff);
+                border-radius: 18px;
+                border-top-right-radius: 4px;
+            }
+        """)
+        
         bl = QVBoxLayout(bubble)
-        bl.setContentsMargins(0, 0, 0, 0)
+        bl.setContentsMargins(16, 12, 16, 12)
         bl.setSpacing(0)
 
         self._content = QLabel()
         self._content.setWordWrap(True)
         self._content.setTextFormat(Qt.RichText)
-        self._content.setTextInteractionFlags(
-            Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse
-        )
+        self._content.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
         self._content.setOpenExternalLinks(True)
         self._content.setStyleSheet(
-            "background: transparent; padding: 2px; "
-            "line-height: 1.5; font-size: 14px; color: #ffffff;"
+            "background: transparent; padding: 0px; "
+            "line-height: 1.4; font-size: 15px; color: #ffffff; font-family: 'Segoe UI', sans-serif;"
         )
         self._content.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         self._content.setText(self._render_markdown(text))
@@ -98,41 +104,65 @@ class MessageBubble(QWidget):
 
         # Avatar
         av = QLabel("👤")
-        av.setFixedSize(28, 28)
+        av.setFixedSize(32, 32)
         av.setAlignment(Qt.AlignCenter)
         av.setStyleSheet(
-            "font-size: 14px; background: rgba(255,255,255,0.06); "
-            "border-radius: 14px;"
+            "font-size: 16px; background: rgba(255,255,255,0.1); "
+            "border-radius: 16px; color: white;"
         )
-        layout.addWidget(av, 0, Qt.AlignTop)
+        layout.addWidget(av, 0, Qt.AlignBottom)
 
     def _build_ai(self, text, avatar, timestamp):
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(2)
+        outer.setContentsMargins(16, 8, 16, 8)
+        outer.setSpacing(6)
 
         # Message row
         msg_row = QHBoxLayout()
-        msg_row.setContentsMargins(16, 4, 16, 4)
-        msg_row.setSpacing(10)
+        msg_row.setSpacing(12)
+
+        # Avatar
+        av = QLabel("🤖")
+        av.setFixedSize(32, 32)
+        av.setAlignment(Qt.AlignCenter)
+        av.setStyleSheet(
+            "font-size: 18px; background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0984e3, stop:1 #00cec9); "
+            "border-radius: 16px; color: white;"
+        )
+        msg_row.addWidget(av, 0, Qt.AlignTop)
 
         bubble = QFrame()
         bubble.setObjectName("AIBubble")
         bubble.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        bubble.setMinimumWidth(320)  # Prevent narrow column wrapping
+        bubble.setStyleSheet("""
+            #AIBubble {
+                background: rgba(20, 24, 40, 0.75);
+                border: 1px solid rgba(100, 120, 180, 0.2);
+                border-radius: 18px;
+                border-top-left-radius: 4px;
+            }
+        """)
+        
         bl = QVBoxLayout(bubble)
-        bl.setContentsMargins(0, 0, 0, 0)
-        bl.setSpacing(4)
+        bl.setContentsMargins(20, 16, 20, 16)
+        bl.setSpacing(10)
 
         # AI header
         hdr = QHBoxLayout()
-        hdr.setSpacing(6)
-        name = QLabel("✦ Holex AI")
+        hdr.setSpacing(8)
+        name = QLabel("Holex Beast")
         name.setObjectName("AIName")
         name.setStyleSheet(
             "font-size: 13px; font-weight: 700; "
-            "color: #e4e4ed; background: transparent;"
+            "color: #a0a0c0; background: transparent; letter-spacing: 0.5px;"
         )
         hdr.addWidget(name)
+        
+        # Thinking/Tool badge placeholder
+        self._tool_area = QHBoxLayout() 
+        hdr.addLayout(self._tool_area)
+        
         hdr.addStretch()
         bl.addLayout(hdr)
 
@@ -140,13 +170,11 @@ class MessageBubble(QWidget):
         self._content = QLabel()
         self._content.setWordWrap(True)
         self._content.setTextFormat(Qt.RichText)
-        self._content.setTextInteractionFlags(
-            Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse
-        )
+        self._content.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
         self._content.setOpenExternalLinks(True)
         self._content.setStyleSheet(
-            "background: transparent; padding: 2px; "
-            "line-height: 1.5; font-size: 14px;"
+            "background: transparent; padding: 0px; "
+            "line-height: 1.5; font-size: 15px; color: #e0e0e0; font-family: 'Segoe UI', sans-serif;"
         )
         self._content.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         self._content.setText(self._render_markdown(text))
@@ -156,10 +184,10 @@ class MessageBubble(QWidget):
         msg_row.addStretch()
         outer.addLayout(msg_row)
 
-        # Action buttons row
+        # Action buttons row (integrated under bubble)
         action_row = QHBoxLayout()
-        action_row.setContentsMargins(20, 0, 20, 0)
-        action_row.setSpacing(6)
+        action_row.setContentsMargins(60, 0, 20, 0) # align with bubble start
+        action_row.setSpacing(12)
 
         # Copy button
         self._copy_btn = QPushButton("📋 Copy")

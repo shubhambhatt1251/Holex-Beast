@@ -26,6 +26,10 @@ Built with Python, PyQt5, and three LLM providers (Groq, Gemini, Ollama) with au
 - **Cloud sync** — Firebase Firestore for conversations. SQLite fallback if Firebase isn't configured.
 - **Plugin system** — Drop a `.py` file in `plugins/` → auto-loaded on startup.
 
+## 💡 Why I Built This
+
+I got tired of "dumb" assistants like Siri and "restricted" ones like Copilot. I wanted something that **actually controls my computer**, runs locally for privacy, and looks like a sci-fi movie. Built late at night with caffeine and Python. 🚀
+
 ## Quick Start
 
 ```bash

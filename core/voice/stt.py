@@ -208,14 +208,14 @@ class SpeechToText:
                 channels=1,
                 rate=self.settings.voice.sample_rate,
                 input=True,
-                frames_per_buffer=4096,
+                frames_per_buffer=1024,
             )
 
             logger.debug("Audio stream opened")
 
             while self._is_listening:
                 try:
-                    data = self._stream.read(4096, exception_on_overflow=False)
+                    data = self._stream.read(1024, exception_on_overflow=False)
                 except Exception:
                     continue
 
@@ -281,7 +281,7 @@ class SpeechToText:
                 import struct
                 samples = struct.unpack(f"{len(data)//2}h", data)
                 rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
-                if rms < 500:
+                if rms < 150:
                     if silence_start is None:
                         silence_start = time.time()
                     elif time.time() - silence_start > self.settings.voice.silence_threshold:

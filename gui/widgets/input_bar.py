@@ -275,9 +275,9 @@ class InputBar(QWidget):
         self._voice_btn.setVisible(not generating)
         self._stop_btn.setVisible(generating)
         if generating:
-            self._input.setPlaceholderText("Ask a new question...")
+            self._input.setPlaceholderText("Holex is thinking…")
         else:
-            self._input.setPlaceholderText("Ask a new question...")
+            self._input.setPlaceholderText("Let's begin...")
 
     # Voice
 

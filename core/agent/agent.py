@@ -31,10 +31,10 @@ MAX_ITERATIONS = 5  # Maximum tool-calling loops
 
 class HolexAgent:
     """
-    Takes user messages, figures out if tools are needed,
-    runs them, and sends everything back through the LLM
-    to get a final answer. Loops up to 5 times if the model
-    keeps wanting more tools.
+    The Brain.
+    
+    It takes user input, decides if it needs tools (Search, Calc, OS Control),
+    executes them, and keeps looping until it has a final answer.
     """
 
     def __init__(self, router: LLMRouter):
@@ -50,6 +50,10 @@ class HolexAgent:
         self._history: list[Message] = []
         self._system_message = Message.system(get_system_prompt())
         self._max_history = 50  # Keep last 50 messages
+
+    def clear_history(self) -> None:
+        """Clear conversation history (called on new/clear chat)."""
+        self._history.clear()
 
     def _register_default_tools(self) -> None:
         """Register all built-in tools."""
@@ -167,7 +171,7 @@ class HolexAgent:
             "tool_count": len(self._tools),
         })
 
-        # ReAct loop: LLM → tools → LLM → tools → ... → final answer
+        # The Think-Act-Observe Loop
         for iteration in range(MAX_ITERATIONS):
             try:
                 response = await self.router.generate(
@@ -195,11 +199,27 @@ class HolexAgent:
                     })
                     return final_text
 
-                # Execute tool calls — include raw tool_calls so Groq gets them back
+                # Execute tool calls
+                import uuid
+                
+                # Ensure all tool calls have IDs and proper structure
+                # This fixes the "missing tool_call_id" error when switching providers
+                normalized_tool_calls = []
+                for tc in tool_calls:
+                    if not tc.get("id"):
+                        tc["id"] = f"call_{uuid.uuid4().hex[:8]}"
+                    normalized_tool_calls.append({
+                        "id": tc["id"],
+                        "type": "function",
+                        "function": {
+                            "name": tc["name"],
+                            "arguments": json.dumps(tc["arguments"])
+                        }
+                    })
+
+                # Add the assistant's request to history with proper IDs
                 assistant_msg = Message.assistant(response.content or "")
-                raw_calls = raw.get("choices", [{}])[0].get("message", {}).get("tool_calls")
-                if raw_calls:
-                    assistant_msg.tool_calls = raw_calls
+                assistant_msg.tool_calls = normalized_tool_calls
                 messages.append(assistant_msg)
 
                 # Emit tool call events
@@ -229,7 +249,7 @@ class HolexAgent:
 
                     # Add tool result to messages (with call ID for Groq/OpenAI)
                     messages.append(Message.tool(
-                        str(result), name=tc["name"], tool_call_id=tc.get("id", ""),
+                        str(result), name=tc["name"], tool_call_id=tc["id"],
                     ))
 
             except Exception as e:
@@ -271,11 +291,23 @@ class HolexAgent:
                 if not tool_calls:
                     break  # No tools needed — stream final answer below
 
-                # Execute tools — preserve raw tool_calls for Groq/OpenAI
+                # Execute proper tool call history construction
+                import uuid
+                normalized_tool_calls = []
+                for tc in tool_calls:
+                    if not tc.get("id"):
+                        tc["id"] = f"call_{uuid.uuid4().hex[:8]}"
+                    normalized_tool_calls.append({
+                        "id": tc["id"],
+                        "type": "function",
+                        "function": {
+                            "name": tc["name"],
+                            "arguments": json.dumps(tc["arguments"])
+                        }
+                    })
+
                 assistant_msg = Message.assistant(response.content or "")
-                raw_calls = raw.get("choices", [{}])[0].get("message", {}).get("tool_calls")
-                if raw_calls:
-                    assistant_msg.tool_calls = raw_calls
+                assistant_msg.tool_calls = normalized_tool_calls
                 messages.append(assistant_msg)
 
                 # Run independent tool calls in parallel
@@ -293,7 +325,7 @@ class HolexAgent:
                         "success": result.success,
                     })
                     messages.append(Message.tool(
-                        str(result), name=tc["name"], tool_call_id=tc.get("id", ""),
+                        str(result), name=tc["name"], tool_call_id=tc["id"],
                     ))
 
             # Stream the final response

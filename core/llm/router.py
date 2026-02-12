@@ -204,6 +204,10 @@ class LLMRouter:
         self._current_model: Optional[str] = None
         self._failover_order: list[str] = []
 
+        # Configurable defaults (can be updated via settings panel)
+        self.default_temperature: float = 0.7
+        self.default_max_tokens: int = 4096
+
         # Stats
         self._request_count = 0
         self._total_tokens = 0
