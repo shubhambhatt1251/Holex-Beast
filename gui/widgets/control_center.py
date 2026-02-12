@@ -121,9 +121,12 @@ class EnergySphere(QWidget):
 
         # Animation Phase
         base_speed = 0.5
-        if self._mode == self.MODE_LISTENING: base_speed = 1.0
-        elif self._mode == self.MODE_PROCESSING: base_speed = 4.0
-        elif self._mode == self.MODE_AI_SPEAKING: base_speed = 1.5
+        if self._mode == self.MODE_LISTENING:
+            base_speed = 1.0
+        elif self._mode == self.MODE_PROCESSING:
+            base_speed = 4.0
+        elif self._mode == self.MODE_AI_SPEAKING:
+            base_speed = 1.5
 
         self._phase += base_speed + (self._audio_level * 2.0)
 
@@ -245,7 +248,8 @@ class EnergySphere(QWidget):
             y = p["y"] * factor
 
             # Check bounds
-            if x*x + y*y > (w*h): continue
+            if x*x + y*y > (w*h):
+                continue
 
             sz = p["size"] / p["z"]
             alpha = int(p["alpha"] * (1.0 - p["z"]))
