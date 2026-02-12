@@ -619,7 +619,7 @@ class HolexBeastApp(QMainWindow):
             conv = self.conversation_manager.get_active()
             if conv and conv.id in self._sidebar._items:
                 item = self._sidebar._items[conv.id]
-                title = conv.title[:28] + ("..." if len(conv.title) > 28 else "")
+                # title = conv.title[:28] + ("..." if len(conv.title) > 28 else "")
                 item.title_text = conv.title
                 item.findChild(QLabel, "ConvTitle")
                 # Just remove and re-add to update display
