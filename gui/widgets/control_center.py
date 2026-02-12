@@ -23,7 +23,6 @@ from PyQt5.QtGui import (
     QBrush,
     QColor,
     QPainter,
-    QPainterPath,
     QPen,
     QRadialGradient,
 )
@@ -77,11 +76,11 @@ class EnergySphere(QWidget):
         self._audio_level = 0.0
         self._target_level = 0.0
         self._phase = 0.0
-        
+
         # Physics
         self._rotation_speed = 0.5
         self._pulse_speed = 0.05
-        
+
         # Nebula Cloud Layers (Randomized but consistent)
         self._nebula_layers = []
         for i in range(5):
@@ -119,15 +118,15 @@ class EnergySphere(QWidget):
         # Smooth audio
         diff = self._target_level - self._audio_level
         self._audio_level += diff * 0.2
-        
+
         # Animation Phase
         base_speed = 0.5
         if self._mode == self.MODE_LISTENING: base_speed = 1.0
         elif self._mode == self.MODE_PROCESSING: base_speed = 4.0
         elif self._mode == self.MODE_AI_SPEAKING: base_speed = 1.5
-        
+
         self._phase += base_speed + (self._audio_level * 2.0)
-        
+
         self.update()
 
     def paintEvent(self, event):
@@ -136,7 +135,7 @@ class EnergySphere(QWidget):
 
         w, h = self.width(), self.height()
         cx, cy = w / 2, h / 2
-        
+
         # Determine Palette based on Mode
         # Core Color, Outer Color
         if self._mode == self.MODE_PROCESSING:
@@ -159,8 +158,8 @@ class EnergySphere(QWidget):
         # Audio Pulse Logic
         audio_boost = self._audio_level * 0.5
         # Breathing sine wave
-        breath = (math.sin(self._phase * 0.05 * pulse_rate) + 1.0) * 0.5 
-        
+        breath = (math.sin(self._phase * 0.05 * pulse_rate) + 1.0) * 0.5
+
         # 1. Background Glow (Transparent Vignette)
         # Soft ambient glow behind everything
         glow_r = min(w, h) * 0.6
@@ -176,61 +175,61 @@ class EnergySphere(QWidget):
         # 2. Nebula Clouds
         painter.save()
         painter.translate(cx, cy)
-        
+
         # Rotate whole system slowly
         painter.rotate(self._phase * 0.2)
-        
+
         cloud_base_r = min(w, h) * 0.35
-        
+
         for layer in self._nebula_layers:
             painter.save()
             painter.rotate(layer["angle"] + self._phase * layer["speed"] * 0.1)
-            
+
             # Distance oscilates with breath
             d = cloud_base_r * layer["dist"] * (1.0 + breath * 0.2 + audio_boost)
-            
+
             # Draw gradient blob
             sz = cloud_base_r * layer["size"]
-            
+
             grad = QRadialGradient(0, d, sz)
             c1 = QColor(c_outer)
             c1.setAlpha(60)
             c2 = QColor(c_outer)
             c2.setAlpha(0)
-            
+
             grad.setColorAt(0.0, c1)
             grad.setColorAt(1.0, c2)
-            
+
             painter.setBrush(QBrush(grad))
             painter.drawEllipse(QRectF(-sz, d-sz, sz*2, sz*2))
-            
+
             painter.restore()
-            
+
         painter.restore()
 
         # 3. Core (The Star)
         core_r = min(w, h) * 0.15 * (1.0 + audio_boost * 0.5)
         core_grad = QRadialGradient(cx, cy, core_r)
-        
+
         c_c1 = QColor(c_core)
         c_c1.setAlpha(255)
         c_c2 = QColor(c_outer)
         c_c2.setAlpha(100)
-        
+
         core_grad.setColorAt(0.0, c_c1)
         core_grad.setColorAt(0.5, c_c2)
         core_grad.setColorAt(1.0, Qt.transparent)
-        
+
         painter.setBrush(QBrush(core_grad))
         painter.drawEllipse(QRectF(cx - core_r, cy - core_r, core_r*2, core_r*2))
 
         # 4. Particles (Star Dust)
         painter.save()
         painter.translate(cx, cy)
-        
+
         # Warp Effect: Particles stretch when speaking
         is_warping = self._mode in [self.MODE_AI_SPEAKING, self.MODE_PROCESSING]
-        
+
         for p in self._particles:
             # 3D projection simulation
             # Move Z towards camera
@@ -239,22 +238,22 @@ class EnergySphere(QWidget):
                 p["z"] = 1.0 # Reset
                 p["x"] = random.uniform(-1, 1)
                 p["y"] = random.uniform(-1, 1)
-            
+
             # Project
             factor = 200.0 / p["z"]
             x = p["x"] * factor
             y = p["y"] * factor
-            
+
             # Check bounds
             if x*x + y*y > (w*h): continue
-            
+
             sz = p["size"] / p["z"]
             alpha = int(p["alpha"] * (1.0 - p["z"]))
-            
+
             c = QColor(255, 255, 255, alpha)
             painter.setBrush(c)
             painter.setPen(Qt.NoPen)
-            
+
             if is_warping and self._audio_level > 0.1:
                 # Streak
                 painter.setPen(QPen(c, sz))
@@ -263,9 +262,9 @@ class EnergySphere(QWidget):
                 painter.drawLine(QPointF(x, y), QPointF(lx, ly))
             else:
                 painter.drawEllipse(QPointF(x, y), sz, sz)
-            
+
         painter.restore()
-        
+
         painter.end()
 
 
@@ -368,12 +367,12 @@ class ControlCenter(QWidget):
         self._sphere.setFixedSize(320, 320) # MASSIVE sphere
         sc.addWidget(self._sphere)
         lay.addLayout(sc)
-        
+
         # Transcript Container (Below Sphere)
         trans_lay = QVBoxLayout()
         trans_lay.setSpacing(8)
         trans_lay.setAlignment(Qt.AlignCenter)
-        
+
         # 1. User Input (The "Question")
         self._user_transcript = QLabel("")
         self._user_transcript.setWordWrap(True)
@@ -395,7 +394,7 @@ class ControlCenter(QWidget):
             "font-style: italic; background: transparent; letter-spacing: 0.5px;"
         )
         trans_lay.addWidget(self._ai_status)
-        
+
         lay.addLayout(trans_lay)
         lay.addStretch(1)
 
@@ -542,11 +541,11 @@ class ControlCenter(QWidget):
             if display:
                 display += " "
             display += f"{self._partial_text}..."
-        
+
         self._user_transcript.setText(display if display else (
             "Listening..." if self._is_listening else ""
         ))
-        
+
         # Style user text based on state
         if not display and self._is_listening:
              self._user_transcript.setStyleSheet("color: rgba(255,255,255,0.4); font-size: 22px;")
@@ -569,17 +568,17 @@ class ControlCenter(QWidget):
             self.text_submitted.emit(self._final_text.strip())
             self._status.setText("Sent!")
             self._ai_status.setText("Processing command...")
-            
+
             # MODE PROCESSING (Gold)
             self._sphere.set_mode(EnergySphere.MODE_PROCESSING)
-            
+
             self._final_text = ""
             self._partial_text = ""
             self._user_transcript.setText("")
-            
+
             # We don't reset to listening immediately here, the app logic might.
             # But the timer below does reset it.
-            
+
             QTimer.singleShot(1500, lambda: (
                 self.activate_voice() # Reset to listening state
             ) if self._is_listening else None)

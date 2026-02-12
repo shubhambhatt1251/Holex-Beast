@@ -201,7 +201,7 @@ class HolexAgent:
 
                 # Execute tool calls
                 import uuid
-                
+
                 # Ensure all tool calls have IDs and proper structure
                 # This fixes the "missing tool_call_id" error when switching providers
                 normalized_tool_calls = []

@@ -27,8 +27,6 @@ from PyQt5.QtGui import (
     QBrush,
     QColor,
     QPainter,
-    QPainterPath,
-    QPen,
     QRadialGradient,
 )
 from PyQt5.QtWidgets import (
@@ -162,14 +160,14 @@ class EnergySphere(QWidget):
     def paintEvent(self, event) -> None:
         is_active = self._active
         level = self._audio_level
-        
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         w = self.width()
         h = self.height()
         cx, cy = w / 2, h / 2
-        
+
         # Base radius
         base_r = min(w, h) * 0.25
         pulse_scale = 1.0 + (level * 0.3) + (self._idle_pulse * 0.05)
@@ -182,7 +180,7 @@ class EnergySphere(QWidget):
         glow.setColorAt(0.0, QColor(60, 100, 255, alpha))
         glow.setColorAt(0.5, QColor(40, 60, 200, int(alpha * 0.4)))
         glow.setColorAt(1.0, QColor(0, 0, 0, 0))
-        
+
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(glow))
         painter.drawEllipse(QRectF(cx - glow_r, cy - glow_r, glow_r * 2, glow_r * 2))
@@ -190,29 +188,29 @@ class EnergySphere(QWidget):
         # --- 2. 3D Particles Ring (Back) ---
         # We simulate 3D by drawing particles sorted by Z depth
         # For simplicity in this loop, we just draw "back" particles first
-        
+
         # Orbital rings
         self._draw_rings(painter, cx, cy, r, front=False)
 
         # --- 3. Core Sphere (The "Energy Source") ---
         core_r = r * 0.9
         grad = QRadialGradient(cx - core_r * 0.3, cy - core_r * 0.3, core_r * 1.5)
-        
+
         # Deep blue/purple gradient
         c1 = QColor(120, 180, 255) if is_active else QColor(100, 140, 255)
         c2 = QColor(60, 40, 200)
         c3 = QColor(10, 5, 40)
-        
+
         grad.setColorAt(0.0, c1)
         grad.setColorAt(0.4, c2)
         grad.setColorAt(1.0, c3)
-        
+
         painter.setBrush(QBrush(grad))
         painter.drawEllipse(QRectF(cx - core_r, cy - core_r, core_r * 2, core_r * 2))
 
         # --- 4. 3D Particles Ring (Front) ---
         self._draw_rings(painter, cx, cy, r, front=True)
-        
+
         # --- 5. Inner Highlight (Glass reflection) ---
         hl_r = core_r * 0.8
         hl = QRadialGradient(cx - hl_r * 0.5, cy - hl_r * 0.5, hl_r)
@@ -228,40 +226,40 @@ class EnergySphere(QWidget):
         # We use a simple pseudo-3D projection: y is compressed (tilt)
         tilt = 0.4
         num_rings = 3
-        
+
         for i in range(num_rings):
             # Ring parameters
             ring_r = r * (1.4 + i*0.4)
-            speed = (self._phase * (1.0 + i*0.5)) 
+            speed = (self._phase * (1.0 + i*0.5))
             angle_offset = i * 2.0
-            
+
             # Use 'waves' config if available or defaults
             color_base = self._waves[i % len(self._waves)]["color"]
-            
+
             # We draw arcs or particles
             # Let's draw dynamic particles orbiting
             num_particles = 12
             for j in range(num_particles):
                 angle = (j / num_particles) * math.tau + speed + angle_offset
-                
+
                 # 3D coordinates
                 x = math.cos(angle) * ring_r
                 z = math.sin(angle) * ring_r  # Depth
                 y = z * tilt
-                
+
                 # Z-sorting: only draw if z match front/back request
                 is_front = z > 0
                 if is_front != front:
                     continue
-                
+
                 # Perspective scaling
                 scale = 1.0 + (z / ring_r) * 0.3
                 alpha_factor = 0.5 + (z / ring_r) * 0.5
-                
+
                 # Draw particle
                 size = 3.0 * scale + (self._audio_level * 5.0)
                 alpha = int(color_base.alpha() * alpha_factor)
-                
+
                 col = QColor(color_base)
                 col.setAlpha(min(255, alpha))
                 p.setBrush(col)

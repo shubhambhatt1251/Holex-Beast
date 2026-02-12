@@ -82,7 +82,7 @@ class MessageBubble(QWidget):
                 border-top-right-radius: 4px;
             }
         """)
-        
+
         bl = QVBoxLayout(bubble)
         bl.setContentsMargins(16, 12, 16, 12)
         bl.setSpacing(0)
@@ -143,7 +143,7 @@ class MessageBubble(QWidget):
                 border-top-left-radius: 4px;
             }
         """)
-        
+
         bl = QVBoxLayout(bubble)
         bl.setContentsMargins(20, 16, 20, 16)
         bl.setSpacing(10)
@@ -158,11 +158,11 @@ class MessageBubble(QWidget):
             "color: #a0a0c0; background: transparent; letter-spacing: 0.5px;"
         )
         hdr.addWidget(name)
-        
+
         # Thinking/Tool badge placeholder
-        self._tool_area = QHBoxLayout() 
+        self._tool_area = QHBoxLayout()
         hdr.addLayout(self._tool_area)
-        
+
         hdr.addStretch()
         bl.addLayout(hdr)
 

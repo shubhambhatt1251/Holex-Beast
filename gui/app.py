@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt5.QtCore import Qt, QPoint, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
@@ -46,10 +46,10 @@ from gui.widgets.control_center import ControlCenter
 from gui.widgets.input_bar import InputBar
 from gui.widgets.settings_panel import SettingsPanel
 from gui.widgets.sidebar import Sidebar
-from gui.widgets.voice_overlay import VoiceOverlay
 
 # Holex Beast GUI widgets
 from gui.widgets.tools_panel import ToolsPanel
+from gui.widgets.voice_overlay import VoiceOverlay
 from gui.widgets.welcome_screen import WelcomeScreen
 
 # ═══════════════════════════════════════════════════════════════════
@@ -513,7 +513,7 @@ class HolexBeastApp(QMainWindow):
     def _connect_signals(self) -> None:
         # Connect signals
         # self._toggle_sidebar_btn is already connected in _build_header
-        
+
         # Shortcuts
         self._new_chat_btn.clicked.connect(self._on_new_chat)
 
@@ -911,7 +911,7 @@ class HolexBeastApp(QMainWindow):
     def _start_listening(self) -> None:
         self._control_center.activate_voice()
         self._input_bar.set_voice_active(True)
-        
+
         # Shared View: Keep Chat Panel visible
         self._chat_panel.show()
         self._splitter.setSizes([650, 500])
@@ -947,7 +947,7 @@ class HolexBeastApp(QMainWindow):
     def _stop_listening(self) -> None:
         self._control_center.deactivate_voice()
         self._input_bar.set_voice_active(False)
-        
+
         # Restore default balanced view
         self._chat_panel.show()
         self._splitter.setSizes([600, 500])
@@ -963,7 +963,7 @@ class HolexBeastApp(QMainWindow):
         """Handle Quick Action commands (intercept for reliability)."""
         # 1. Show in Chat
         self._on_user_message(cmd)
-        
+
         # 2. Fast-path for Screenshot (Reliability fix)
         # If the user clicks "Screenshot", we shouldn't rely solely on LLM agent
         # which might be slow or offline.
@@ -975,7 +975,7 @@ class HolexBeastApp(QMainWindow):
                         # Execute directly in background
                         async def _run_snap():
                             await tool.execute("screenshot")
-                        
+
                         worker = AsyncWorker(_run_snap())
                         worker.result_ready.connect(lambda res: (
                             self._on_response_received(f"✅ {res.output}")
